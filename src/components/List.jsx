@@ -1,143 +1,232 @@
-import React, { useState } from 'react';
+import React, { memo, useState, useCallback } from 'react';
 import { Droppable, Draggable } from 'react-beautiful-dnd';
-import styled from '@emotion/styled';
+import { Paper, Typography, IconButton, TextField, Button, Box, ClickAwayListener } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 import Card from './Card';
 
-const ListContainer = styled.div`
-  background: #ebecf0;
-  border-radius: 3px;
-  width: 272px;
-  padding: 8px;
-  height: fit-content;
-  margin: 0 4px;
-`;
-
-const ListHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 8px;
-`;
-
-const ListTitle = styled.h2`
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0;
-`;
-
-const DeleteButton = styled.button`
-  background: none;
-  border: none;
-  color: #6b778c;
-  cursor: pointer;
-  padding: 4px;
-  
-  &:hover {
-    color: #172b4d;
-  }
-`;
-
-const AddCardForm = styled.div`
-  margin-top: 8px;
-`;
-
-const CardInput = styled.textarea`
-  width: 100%;
-  border: none;
-  resize: none;
-  padding: 6px 8px;
-  border-radius: 3px;
-  box-shadow: 0 1px 0 #091e4240;
-  margin-bottom: 8px;
-  min-height: 54px;
-`;
-
-const AddCardButton = styled.button`
-  background: #0079bf;
-  border: none;
-  color: white;
-  padding: 6px 12px;
-  border-radius: 3px;
-  cursor: pointer;
-  
-  &:hover {
-    background: #026aa7;
-  }
-`;
-
-const CardsContainer = styled.div`
-  min-height: 20px;
-  padding: 0 4px;
-`;
-
-const List = ({ list, onAddCard, onDeleteList, index }) => {
+const List = memo(({ list, onAddCard, onDeleteList, onUpdateTitle, onUpdateCard, onDeleteCard, index }) => {
   const [newCardText, setNewCardText] = useState('');
   const [isAddingCard, setIsAddingCard] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleText, setTitleText] = useState(list.title);
 
-  const handleAddCard = () => {
+  const handleAddCard = useCallback(() => {
     if (newCardText.trim()) {
       onAddCard(list.id, newCardText.trim());
       setNewCardText('');
       setIsAddingCard(false);
     }
-  };
+  }, [list.id, newCardText, onAddCard]);
+
+  const handleKeyPress = useCallback((e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleAddCard();
+    }
+  }, [handleAddCard]);
+
+  const handleTitleKeyPress = useCallback((e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (titleText.trim()) {
+        onUpdateTitle(list.id, titleText.trim());
+        setIsEditingTitle(false);
+      }
+    }
+  }, [list.id, titleText, onUpdateTitle]);
+
+  const handleTitleSubmit = useCallback(() => {
+    if (titleText.trim() && titleText !== list.title) {
+      onUpdateTitle(list.id, titleText.trim());
+    } else {
+      setTitleText(list.title);
+    }
+    setIsEditingTitle(false);
+  }, [list.id, list.title, titleText, onUpdateTitle]);
+
+  const handleUpdateCard = useCallback((cardId, newContent) => {
+    onUpdateCard(list.id, cardId, newContent);
+  }, [list.id, onUpdateCard]);
+
+  const handleDeleteCard = useCallback((cardId) => {
+    onDeleteCard(list.id, cardId);
+  }, [list.id, onDeleteCard]);
 
   return (
     <Draggable draggableId={list.id} index={index}>
-      {(provided) => (
-        <ListContainer
+      {(provided, snapshot) => (
+        <Paper
           {...provided.draggableProps}
           ref={provided.innerRef}
+          elevation={2}
+          sx={{
+            width: 300,
+            bgcolor: 'grey.100',
+            m: 1,
+            borderRadius: 2,
+            transition: 'transform 0.2s ease',
+            transform: snapshot.isDragging 
+              ? provided.draggableProps.style.transform + ' rotate(1deg)'
+              : provided.draggableProps.style?.transform
+          }}
         >
-          <ListHeader {...provided.dragHandleProps}>
-            <ListTitle>{list.title}</ListTitle>
-            <DeleteButton onClick={() => onDeleteList(list.id)}>×</DeleteButton>
-          </ListHeader>
+          <Box
+            {...provided.dragHandleProps}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              p: 2,
+              borderBottom: '1px solid',
+              borderColor: 'grey.300'
+            }}
+          >
+            {isEditingTitle ? (
+              <ClickAwayListener onClickAway={handleTitleSubmit}>
+                <TextField
+                  size="small"
+                  value={titleText}
+                  onChange={(e) => setTitleText(e.target.value)}
+                  onKeyPress={handleTitleKeyPress}
+                  autoFocus
+                  sx={{ 
+                    width: '80%',
+                    '& .MuiInputBase-input': {
+                      fontSize: '1rem',
+                      fontWeight: 600,
+                      py: 0.5,
+                    }
+                  }}
+                />
+              </ClickAwayListener>
+            ) : (
+              <Box sx={{ display: 'flex', alignItems: 'center', width: '80%' }}>
+                <Typography 
+                  variant="h6" 
+                  sx={{ 
+                    fontSize: '1rem', 
+                    fontWeight: 600,
+                    flexGrow: 1,
+                    cursor: 'pointer',
+                    '&:hover': {
+                      '& + .edit-icon': {
+                        opacity: 1,
+                      }
+                    }
+                  }}
+                  onClick={() => setIsEditingTitle(true)}
+                >
+                  {list.title}
+                </Typography>
+                <IconButton
+                  className="edit-icon"
+                  size="small"
+                  onClick={() => setIsEditingTitle(true)}
+                  sx={{ 
+                    opacity: 0,
+                    transition: 'opacity 0.2s',
+                    ml: 1,
+                    '&:hover': {
+                      opacity: 1,
+                    }
+                  }}
+                >
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            )}
+            <IconButton 
+              size="small" 
+              onClick={() => onDeleteList(list.id)}
+              sx={{ color: 'grey.500', '&:hover': { color: 'grey.700' } }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Box>
 
           <Droppable droppableId={list.id} type="card">
-            {(droppableProvided) => (
-              <CardsContainer
+            {(droppableProvided, droppableSnapshot) => (
+              <Box
                 {...droppableProvided.droppableProps}
                 ref={droppableProvided.innerRef}
+                sx={{
+                  minHeight: 20,
+                  p: 1,
+                  transition: 'background-color 0.2s ease',
+                  bgcolor: droppableSnapshot.isDraggingOver ? 'action.hover' : 'transparent'
+                }}
               >
                 {list.cards.map((card, cardIndex) => (
-                  <Card key={card.id} card={card} index={cardIndex} />
+                  <Card 
+                    key={card.id} 
+                    card={card} 
+                    index={cardIndex}
+                    onUpdateCard={handleUpdateCard}
+                    onDeleteCard={handleDeleteCard}
+                  />
                 ))}
                 {droppableProvided.placeholder}
-              </CardsContainer>
+              </Box>
             )}
           </Droppable>
 
           {isAddingCard ? (
-            <AddCardForm>
-              <CardInput
+            <Box sx={{ p: 1 }}>
+              <TextField
+                multiline
+                fullWidth
+                size="small"
                 value={newCardText}
                 onChange={(e) => setNewCardText(e.target.value)}
+                onKeyPress={handleKeyPress}
                 placeholder="Enter a title for this card..."
                 autoFocus
+                sx={{ mb: 1 }}
               />
-              <AddCardButton onClick={handleAddCard}>
+              <Button
+                variant="contained"
+                onClick={handleAddCard}
+                disabled={!newCardText.trim()}
+                size="small"
+                sx={{ mr: 1 }}
+              >
                 Add Card
-              </AddCardButton>
-            </AddCardForm>
+              </Button>
+              <Button
+                size="small"
+                onClick={() => {
+                  setIsAddingCard(false);
+                  setNewCardText('');
+                }}
+              >
+                Cancel
+              </Button>
+            </Box>
           ) : (
-            <AddCardButton 
+            <Button
+              startIcon={<AddIcon />}
               onClick={() => setIsAddingCard(true)}
-              style={{ 
-                background: 'transparent', 
-                color: '#5e6c84',
-                textAlign: 'left',
-                padding: '8px',
-                width: '100%'
+              fullWidth
+              sx={{
+                justifyContent: 'flex-start',
+                color: 'text.secondary',
+                p: 1,
+                '&:hover': {
+                  backgroundColor: 'action.hover'
+                }
               }}
             >
-              + Add a card
-            </AddCardButton>
+              Add a card
+            </Button>
           )}
-        </ListContainer>
+        </Paper>
       )}
     </Draggable>
   );
-};
+});
+
+List.displayName = 'List';
 
 export default List; 

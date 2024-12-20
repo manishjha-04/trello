@@ -1,53 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { DragDropContext, Droppable } from 'react-beautiful-dnd';
-import styled from '@emotion/styled';
+import { Box, Button, ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import List from './components/List';
 
-const Container = styled.div`
-  display: flex;
-  padding: 20px;
-  overflow-x: auto;
-  background: #f8f9fa;
-  min-height: 100vh;
-`;
-
-const ListsContainer = styled.div`
-  display: flex;
-  align-items: flex-start;
-`;
-
-const AddListButton = styled.button`
-  min-width: 272px;
-  padding: 10px;
-  margin: 0 4px;
-  background: rgba(0, 0, 0, 0.05);
-  border: none;
-  border-radius: 3px;
-  color: #172b4d;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 400;
-  height: fit-content;
-  
-  &:hover {
-    background: rgba(0, 0, 0, 0.08);
-  }
-`;
+const theme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: '#0079bf',
+    },
+    background: {
+      default: '#0079bf',
+      paper: '#fff',
+    },
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+        },
+      },
+    },
+  },
+});
 
 function App() {
   const [lists, setLists] = useState([]);
 
-  const addList = () => {
+  const addList = useCallback(() => {
     const newList = {
       id: `list-${Date.now()}`,
       title: 'New List',
       cards: []
     };
-    setLists([...lists, newList]);
-  };
+    setLists(prevLists => [...prevLists, newList]);
+  }, []);
 
-  const addCard = (listId, cardText) => {
-    setLists(lists.map(list => {
+  const updateListTitle = useCallback((listId, newTitle) => {
+    setLists(prevLists => prevLists.map(list => 
+      list.id === listId 
+        ? { ...list, title: newTitle }
+        : list
+    ));
+  }, []);
+
+  const addCard = useCallback((listId, cardText) => {
+    setLists(prevLists => prevLists.map(list => {
       if (list.id === listId) {
         return {
           ...list,
@@ -56,13 +56,41 @@ function App() {
       }
       return list;
     }));
-  };
+  }, []);
 
-  const deleteList = (listId) => {
-    setLists(lists.filter(list => list.id !== listId));
-  };
+  const updateCard = useCallback((listId, cardId, newContent) => {
+    setLists(prevLists => prevLists.map(list => {
+      if (list.id === listId) {
+        return {
+          ...list,
+          cards: list.cards.map(card =>
+            card.id === cardId
+              ? { ...card, content: newContent }
+              : card
+          )
+        };
+      }
+      return list;
+    }));
+  }, []);
 
-  const onDragEnd = (result) => {
+  const deleteCard = useCallback((listId, cardId) => {
+    setLists(prevLists => prevLists.map(list => {
+      if (list.id === listId) {
+        return {
+          ...list,
+          cards: list.cards.filter(card => card.id !== cardId)
+        };
+      }
+      return list;
+    }));
+  }, []);
+
+  const deleteList = useCallback((listId) => {
+    setLists(prevLists => prevLists.filter(list => list.id !== listId));
+  }, []);
+
+  const onDragEnd = useCallback((result) => {
     const { destination, source, draggableId, type } = result;
 
     if (!destination) return;
@@ -76,87 +104,127 @@ function App() {
 
     // Handle list reordering
     if (type === 'list') {
-      const newLists = Array.from(lists);
-      const [removed] = newLists.splice(source.index, 1);
-      newLists.splice(destination.index, 0, removed);
-      setLists(newLists);
+      setLists(prevLists => {
+        const newLists = Array.from(prevLists);
+        const [removed] = newLists.splice(source.index, 1);
+        newLists.splice(destination.index, 0, removed);
+        return newLists;
+      });
       return;
     }
 
     // Handle card reordering
-    const sourceList = lists.find(list => list.id === source.droppableId);
-    const destList = lists.find(list => list.id === destination.droppableId);
-    const draggingCard = sourceList.cards.find(card => card.id === draggableId);
+    setLists(prevLists => {
+      const sourceList = prevLists.find(list => list.id === source.droppableId);
+      const destList = prevLists.find(list => list.id === destination.droppableId);
+      const draggingCard = sourceList.cards.find(card => card.id === draggableId);
 
-    if (source.droppableId === destination.droppableId) {
-      // Moving within the same list
-      const newCards = Array.from(sourceList.cards);
-      newCards.splice(source.index, 1);
-      newCards.splice(destination.index, 0, draggingCard);
+      if (source.droppableId === destination.droppableId) {
+        // Moving within the same list
+        const newCards = Array.from(sourceList.cards);
+        newCards.splice(source.index, 1);
+        newCards.splice(destination.index, 0, draggingCard);
 
-      const newList = {
-        ...sourceList,
-        cards: newCards
-      };
+        return prevLists.map(list =>
+          list.id === sourceList.id
+            ? { ...list, cards: newCards }
+            : list
+        );
+      } else {
+        // Moving to another list
+        const sourceCards = Array.from(sourceList.cards);
+        sourceCards.splice(source.index, 1);
 
-      setLists(lists.map(list => 
-        list.id === newList.id ? newList : list
-      ));
-    } else {
-      // Moving to another list
-      const sourceCards = Array.from(sourceList.cards);
-      sourceCards.splice(source.index, 1);
-      const newSourceList = {
-        ...sourceList,
-        cards: sourceCards
-      };
+        const destinationCards = Array.from(destList.cards);
+        destinationCards.splice(destination.index, 0, draggingCard);
 
-      const destinationCards = Array.from(destList.cards);
-      destinationCards.splice(destination.index, 0, draggingCard);
-      const newDestList = {
-        ...destList,
-        cards: destinationCards
-      };
-
-      setLists(lists.map(list => {
-        if (list.id === source.droppableId) {
-          return newSourceList;
-        }
-        if (list.id === destination.droppableId) {
-          return newDestList;
-        }
-        return list;
-      }));
-    }
-  };
+        return prevLists.map(list => {
+          if (list.id === source.droppableId) {
+            return { ...list, cards: sourceCards };
+          }
+          if (list.id === destination.droppableId) {
+            return { ...list, cards: destinationCards };
+          }
+          return list;
+        });
+      }
+    });
+  }, []);
 
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
-      <Container>
-        <Droppable droppableId="all-lists" direction="horizontal" type="list">
-          {(provided) => (
-            <ListsContainer
-              {...provided.droppableProps}
-              ref={provided.innerRef}
-            >
-              {lists.map((list, index) => (
-                <List
-                  key={list.id}
-                  list={list}
-                  onAddCard={addCard}
-                  onDeleteList={deleteList}
-                  index={index}
-                />
-              ))}
-              {provided.placeholder}
-            </ListsContainer>
-          )}
-        </Droppable>
-        <AddListButton onClick={addList}>
-          + Add another list
-        </AddListButton>
-      </Container>
-    </DragDropContext>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <DragDropContext onDragEnd={onDragEnd}>
+        <Box
+          sx={{
+            minHeight: '100vh',
+            bgcolor: 'background.default',
+            display: 'flex',
+            p: 3,
+            overflowX: 'auto',
+            '&::-webkit-scrollbar': {
+              height: 8,
+            },
+            '&::-webkit-scrollbar-track': {
+              bgcolor: 'rgba(255, 255, 255, 0.1)',
+              borderRadius: 4,
+            },
+            '&::-webkit-scrollbar-thumb': {
+              bgcolor: 'rgba(255, 255, 255, 0.2)',
+              borderRadius: 4,
+              '&:hover': {
+                bgcolor: 'rgba(255, 255, 255, 0.3)',
+              },
+            },
+          }}
+        >
+          <Droppable droppableId="all-lists" direction="horizontal" type="list">
+            {(provided) => (
+              <Box
+                {...provided.droppableProps}
+                ref={provided.innerRef}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  p: 1,
+                }}
+              >
+                {lists.map((list, index) => (
+                  <List
+                    key={list.id}
+                    list={list}
+                    onAddCard={addCard}
+                    onDeleteList={deleteList}
+                    onUpdateTitle={updateListTitle}
+                    onUpdateCard={updateCard}
+                    onDeleteCard={deleteCard}
+                    index={index}
+                  />
+                ))}
+                {provided.placeholder}
+              </Box>
+            )}
+          </Droppable>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={addList}
+            sx={{
+              height: 'fit-content',
+              minWidth: 300,
+              m: 1,
+              bgcolor: 'rgba(255, 255, 255, 0.2)',
+              color: 'white',
+              '&:hover': {
+                bgcolor: 'rgba(255, 255, 255, 0.3)',
+              },
+            }}
+          >
+            Add another list
+          </Button>
+        </Box>
+      </DragDropContext>
+    </ThemeProvider>
   );
 }
 
